@@ -16,6 +16,7 @@ contract FlightSuretyData {
         string name;
         bool isRegistered;
         bool isFunded;
+        uint256 fund;
     }
 
     mapping (address => Airline) airlines;
@@ -35,7 +36,7 @@ contract FlightSuretyData {
     constructor
                                 (
                                     address _firstAirline,
-                                    string memory _firstAirlineName
+                                    string _firstAirlineName
                                 ) 
                                 public 
     {
@@ -43,6 +44,7 @@ contract FlightSuretyData {
 
         airlines[_firstAirline].isRegistered = true;
         airlines[_firstAirline].name = _firstAirlineName;
+        airlines[_firstAirline].fund = 0;
         
 
         airlinesCount = 1;
@@ -79,7 +81,7 @@ contract FlightSuretyData {
     modifier isAuthorizedCaller() {
         require(authorizedContracts[msg.sender] == 1, "Caller is not authorized");
         _;
-    }    
+    }
 
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
@@ -126,11 +128,11 @@ contract FlightSuretyData {
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
-    function getAirlinesCount() public view returns(uint256) {
+    function getAirlineCount() public view returns(uint256) {
         return airlinesCount;
     }
 
-    function getFundedAirlinesCount() external view returns(uint256) {
+    function getFundedAirlineCount() external view returns(uint256) {
         return fundedAirlinesCount;
     }
 
@@ -163,9 +165,8 @@ contract FlightSuretyData {
     {        
         airlines[airlineAddress].isRegistered = true;
         airlines[airlineAddress].name = name;
-        airlines[airlineAddress].isFunded = false;
 
-        airlinesCount = airlinesCount + 1;
+        airlinesCount = airlinesCount.add(1);        
     }
 
 
@@ -206,6 +207,15 @@ contract FlightSuretyData {
     {
     }
 
+    function fundAirline(address airline) external payable {
+        airlines[airline].fund = msg.value.add(airlines[airline].fund);
+
+        if(airlines[airline].fund >= 10) {
+            airlines[airline].isFunded = true;
+            fundedAirlinesCount = fundedAirlinesCount.add(1);
+        }
+    }
+
    /**
     * @dev Initial funding for the insurance. Unless there are too many delayed flights
     *      resulting in insurance payouts, the contract should be self-sustaining
@@ -217,7 +227,6 @@ contract FlightSuretyData {
                             public
                             payable                            
     {
-        airlines[msg.sender].isFunded = true;
     }
 
     function getFlightKey

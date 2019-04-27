@@ -4,6 +4,7 @@ var BigNumber = require('bignumber.js');
 contract('Flight Surety Tests', async (accounts) => {
 
     var config;
+
     before('setup contract', async () => {
         config = await Test.Config(accounts);
         await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address);
@@ -66,7 +67,7 @@ contract('Flight Surety Tests', async (accounts) => {
 
     });
 
-    it('(airline) was first airline registered', async () => {
+    it('(airline) first airline was registered', async () => {
         let result = await config.flightSuretyData.isAirline(config.firstAirline);
 
         assert.equal(result, true, "First airline was registered");
@@ -85,17 +86,105 @@ contract('Flight Surety Tests', async (accounts) => {
             });
 
         } catch (e) {
+            if (e.reason !== 'Airline is not funded') {
+                console.log(e);
+            } else {
+                result = await config.flightSuretyData.isAirline.call(newAirline);
+            }
         }
-        
-        result = await config.flightSuretyData.isAirline.call(newAirline);
+
 
         // ASSERT
         assert.equal(result, false, "Airline should not be able to register another airline if it hasn't provided funding");
 
     });
 
-    it('(airline) register airline using registerAirline() when it is funded', async() => {
-        
+    it('(multiparty) Only existing funded airline may register a new airline', async () => {
+
+        let result = false;
+        let newAirline = accounts[2];
+
+        try {
+
+            await config.flightSuretyApp.fundAirline({
+                from: config.firstAirline,
+                value: config.weiMultiple
+            });
+
+            await config.flightSuretyApp.registerAirline(newAirline, 'New Airline', {
+                from: config.firstAirline
+            });
+
+            result = await config.flightSuretyData.isAirline(newAirline);
+        } catch (e) {
+            console.log(e)
+        }
+
+        assert.equal(result, true, 'Airline should register another one if it is funded');
     });
 
+    it('(airline) fail registering duplicate airline', async () => {
+        let result = true;
+
+        try {
+            let newAirline = accounts[2];
+            let airlineName = 'New Airline';
+            let fund = config.weiMultiple;
+
+            await config.flightSuretyApp.fundAirline({
+                from: config.firstAirline,
+                value: fund
+            });
+
+            await config.flightSuretyApp.registerAirline(newAirline, airlineName, {
+                from: config.firstAirline
+            });
+
+            await config.flightSuretyApp.registerAirline(newAirline, airlineName, {
+                from: config.firstAirline
+            });
+
+            result = false;
+        } catch (e) {
+            if (e.reason !== 'Airline already registered') {
+                result = false;
+                console.log(e);
+            }
+        }
+
+        assert.equal(result, true, 'Should not register duplicate airline');
+    });
+
+    it('(mutliparty) 5th airline should not be registered if less than 50% votes', async () => {
+
+        let result = true;
+        let votingAirlines = accounts.slice(3, 7);
+        let testAirline = accounts[7];
+        let testAirlineName = 'Test Airline';
+
+        try {
+            for (let i = 0; i < votingAirlines.length; i++) {
+                let a = votingAirlines[i];
+
+                await config.flightSuretyApp.registerAirline(a, `Voting Airline ${i}`, {
+                    from: config.firstAirline
+                });
+
+                // await config.flightSuretyApp.fundAirline({
+                //     from: a,
+                //     value: config.weiMultiple
+                // });
+            }
+
+            await config.flightSuretyApp.registerAirline(testAirline, testAirlineName, {
+                from: config.firstAirline
+            });
+
+            result = await config.flightSuretyData.isAirline(testAirline);
+        } catch (e) {
+            console.log(e);
+        }
+
+        assert.equal(result, false, 'Airline should not be registered if less than 50% votes');
+    });
 });

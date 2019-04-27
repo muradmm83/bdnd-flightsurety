@@ -24,6 +24,7 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
+    uint256 private constant AIRLINE_VOTING_THRESHOLD = 4;
 
     address private contractOwner;          // Account used to deploy contract
 
@@ -35,8 +36,12 @@ contract FlightSuretyApp {
     }
     mapping(bytes32 => Flight) private flights;
 
-
-    mapping (address => uint256) pendingAirlines;
+    struct Airline {
+        string name;
+        uint pending;
+    }
+    mapping (address => Airline) pendingAirlines;
+    mapping (address => address[]) votes;
  
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -66,10 +71,43 @@ contract FlightSuretyApp {
         _;
     }
 
-    modifier requireFundedAirline() {
+    modifier requireFundedAirline(address airline) {
         bool isFunded;
-        (,,isFunded) = dataContract.getAirline(msg.sender);
+        (,,isFunded) = dataContract.getAirline(airline);
         require(isFunded, "Airline is not funded");
+        _;
+    }
+
+    modifier requireNotRegisteredAirline(address airline) {
+        bool isRegistered = true;
+        (,isRegistered,) = dataContract.getAirline(airline);
+        require(!isRegistered, "Airline already registered");
+        _;
+    }
+
+    modifier votingRequired() 
+    {
+        require(dataContract.getAirlineCount() > AIRLINE_VOTING_THRESHOLD, "No need for voting");
+        _;
+    }
+
+    modifier votingNotRequired() 
+    {
+        require(dataContract.getAirlineCount() < AIRLINE_VOTING_THRESHOLD, "Needs voting for registeration");
+        _;
+    }
+
+    modifier requireNotPendingAirline(address airline) 
+    {
+        require(pendingAirlines[airline].pending != 1, "Airline already pending votes");
+        _;
+    }
+
+    modifier requireRegisteredAirline(address airline) 
+    {
+        bool isRegistered = true;
+        (,isRegistered,) = dataContract.getAirline(airline);
+        require(isRegistered, "Airline is not registered");
         _;
     }
 
@@ -107,6 +145,32 @@ contract FlightSuretyApp {
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
+    function voteForAirline(address airline) 
+        internal
+        requireFundedAirline(msg.sender) 
+        votingRequired 
+        requireNotPendingAirline(airline)
+        requireNotRegisteredAirline(airline) 
+    {
+        bool isDuplicate = false;
+
+        for(uint i = 0; i < votes[airline].length; i++)
+        {
+            if(votes[airline][i] == msg.sender) {
+                isDuplicate = true;
+                break;
+            }
+        }
+
+        require(isDuplicate, "Already voted!");
+
+        votes[airline].push(msg.sender);
+
+        if(votes[airline].length > (dataContract.getFundedAirlineCount().div(2))) {
+            dataContract.registerAirline(airline, pendingAirlines[airline].name);
+            delete votes[airline];
+        }
+    }
   
    /**
     * @dev Add an airline to the registration queue
@@ -117,10 +181,29 @@ contract FlightSuretyApp {
                                 address airlineAddress,
                                 string name   
                             )
-                            external
-                            requireFundedAirline
+                            external                            
+                            requireFundedAirline(msg.sender)
+                            requireNotPendingAirline(airlineAddress)
+                            requireNotRegisteredAirline(airlineAddress)
+
     {
-        dataContract.registerAirline(airlineAddress, name);
+        if(dataContract.getAirlineCount() < AIRLINE_VOTING_THRESHOLD) 
+        {
+            dataContract.registerAirline(airlineAddress, name);
+        }
+        else
+        {
+            pendingAirlines[airlineAddress] = Airline(name, 1);
+        }
+    }
+
+    function fundAirline()
+        external
+        payable
+        requireRegisteredAirline(msg.sender)
+
+    {
+        dataContract.fundAirline.value(msg.value)(msg.sender);
     }
 
 
@@ -362,9 +445,11 @@ contract FlightSuretyData {
     
     function getAirline(address _airlineAddress) external view returns(string name, bool isRegistered, bool isFunded);
 
-    function getAirlinesCount() external view returns(uint256);
+    function getAirlineCount() external view returns(uint256);
 
-    function getFundedAirlinesCount() external view returns(uint256);
+    function getFundedAirlineCount() external view returns(uint256);
+
+    function fundAirline(address airline) external payable;
 }
 
 // endregion
