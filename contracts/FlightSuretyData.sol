@@ -19,10 +19,17 @@ contract FlightSuretyData {
         uint256 fund;
     }
 
+    struct Passenger {
+        uint256 balance;
+        uint256 insuranceCredit;
+    }
+
     mapping (address => Airline) airlines;
     mapping(address => uint256) authorizedContracts;
     uint256 private airlinesCount;
     uint256 private fundedAirlinesCount;
+
+    mapping (address => Passenger) passengers;
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
@@ -169,18 +176,25 @@ contract FlightSuretyData {
         airlinesCount = airlinesCount.add(1);        
     }
 
+    function getPassenger(address passengerAddress) external returns(uint256 balance, uint256 insuranceCredit)
+    {
+        balance = passengers[passengerAddress].balance;
+        insuranceCredit = passengers[passengerAddress].insuranceCredit;
+    }
+
 
    /**
     * @dev Buy insurance for a flight
     *
     */   
     function buy
-                            (                             
+                            (
+                                address passengerAddress                             
                             )
                             external
                             payable
     {
-
+        passengers[passengerAddress].balance = msg.value.add(passengers[passengerAddress].balance);
     }
 
     /**
@@ -188,10 +202,12 @@ contract FlightSuretyData {
     */
     function creditInsurees
                                 (
+                                    address passengerAddress
                                 )
                                 external
-                                pure
+                                payable
     {
+        passengers[passengerAddress].insuranceCredit = msg.value.add(passengers[passengerAddress].insuranceCredit);
     }
     
 
@@ -201,10 +217,15 @@ contract FlightSuretyData {
     */
     function pay
                             (
+                                uint256 amount
                             )
                             external
-                            pure
     {
+        require(amount <= passengers[msg.sender].insuranceCredit, "Not enough insurance credit");
+
+        passengers[msg.sender].insuranceCredit = passengers[msg.sender].insuranceCredit.sub(amount);
+
+        msg.sender.transfer(amount);
     }
 
     function fundAirline(address airline) external payable {

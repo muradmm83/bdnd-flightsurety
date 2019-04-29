@@ -25,6 +25,7 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
     uint256 private constant AIRLINE_VOTING_THRESHOLD = 4;
+    uint256 public constant MAX_FLIGHT_INSURACE = 1 ether;
 
     address private contractOwner;          // Account used to deploy contract
 
@@ -271,6 +272,20 @@ contract FlightSuretyApp {
                                             });
 
         emit OracleRequest(index, airline, flight, timestamp);
+    }
+
+    function buyInsurance() external payable 
+    {
+        uint256 balance;
+        (balance,) = dataContract.getPassenger(msg.sender);
+        balance = balance.add(msg.value);
+
+        if(balance >= MAX_FLIGHT_INSURACE) {
+            msg.sender.transfer(msg.value);
+            require(false, "Exceeded max allowed insurance amount");
+        }
+
+        dataContract.buy.value(msg.value)(msg.sender);
     } 
 
 
@@ -465,6 +480,10 @@ contract FlightSuretyData {
     function getFundedAirlineCount() external view returns(uint256);
 
     function fundAirline(address airline) external payable;
+
+    function getPassenger(address passengerAddress) external returns(uint256 balance, uint256 insuranceCredit);
+
+    function buy(address passengerAddress) external payable;
 }
 
 // endregion
