@@ -10,6 +10,13 @@ contract('Flight Surety Tests', async (accounts) => {
         await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address);
     });
 
+    afterEach('Airlines Count', async () => {
+        let funded = (await config.flightSuretyApp.getFundedAirlineCount()).toNumber();
+        let airline = (await config.flightSuretyApp.getAirlineCount()).toNumber();
+
+        console.log(`Airline Count: ${airline}`, `Funded Count: ${funded}`);
+    });
+
     /****************************************************************************************/
     /* Operations and Settings                                                              */
     /****************************************************************************************/
@@ -131,15 +138,6 @@ contract('Flight Surety Tests', async (accounts) => {
             let airlineName = 'New Airline';
             let fund = config.weiMultiple;
 
-            await config.flightSuretyApp.fundAirline({
-                from: config.firstAirline,
-                value: fund
-            });
-
-            await config.flightSuretyApp.registerAirline(newAirline, airlineName, {
-                from: config.firstAirline
-            });
-
             await config.flightSuretyApp.registerAirline(newAirline, airlineName, {
                 from: config.firstAirline
             });
@@ -158,8 +156,8 @@ contract('Flight Surety Tests', async (accounts) => {
     it('(mutliparty) 5th airline should not be registered if less than 50% votes', async () => {
 
         let result = true;
-        let votingAirlines = accounts.slice(3, 7);
-        let testAirline = accounts[7];
+        let votingAirlines = accounts.slice(3, 5);
+        let testAirline = accounts[6];
         let testAirlineName = 'Test Airline';
 
         try {
@@ -169,11 +167,6 @@ contract('Flight Surety Tests', async (accounts) => {
                 await config.flightSuretyApp.registerAirline(a, `Voting Airline ${i}`, {
                     from: config.firstAirline
                 });
-
-                // await config.flightSuretyApp.fundAirline({
-                //     from: a,
-                //     value: config.weiMultiple
-                // });
             }
 
             await config.flightSuretyApp.registerAirline(testAirline, testAirlineName, {
@@ -186,5 +179,24 @@ contract('Flight Surety Tests', async (accounts) => {
         }
 
         assert.equal(result, false, 'Airline should not be registered if less than 50% votes');
+    });
+
+    it('(mutliparty) 5th airline should be registered if more than 50% votes', async () => {
+        let result = false;
+        let testAirline = accounts[6];
+
+        try {
+            await config.flightSuretyApp.voteForAirline(testAirline, {
+                from: config.firstAirline
+            });
+
+            result = await config.flightSuretyData.isAirline(testAirline);
+
+
+        } catch (e) {
+            console.log(e);
+        }
+
+        assert.equal(result, true, 'Airline should not be registered if less than 50% votes');
     });
 });

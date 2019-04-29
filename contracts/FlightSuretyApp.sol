@@ -85,21 +85,27 @@ contract FlightSuretyApp {
         _;
     }
 
-    modifier votingRequired() 
+    modifier requireVotingThreshold() 
     {
-        require(dataContract.getAirlineCount() > AIRLINE_VOTING_THRESHOLD, "No need for voting");
+        require(dataContract.getAirlineCount() >= AIRLINE_VOTING_THRESHOLD, "Less than voting threshold");
         _;
     }
 
-    modifier votingNotRequired() 
+    modifier requireNoVotingThreshold() 
     {
-        require(dataContract.getAirlineCount() < AIRLINE_VOTING_THRESHOLD, "Needs voting for registeration");
+        require(dataContract.getAirlineCount() < AIRLINE_VOTING_THRESHOLD, "More than voting threshold");
+        _;
+    }
+
+    modifier requirePendingAirline(address airline) 
+    {
+        require(pendingAirlines[airline].pending == 1, "Airline is not pending registeration");
         _;
     }
 
     modifier requireNotPendingAirline(address airline) 
     {
-        require(pendingAirlines[airline].pending != 1, "Airline already pending votes");
+        require(pendingAirlines[airline].pending != 1, "Airline is not pending registeration");
         _;
     }
 
@@ -141,15 +147,23 @@ contract FlightSuretyApp {
         return true;  // Modify to call data contract's status
     }
 
+    function getAirlineCount() public view returns(uint256) {
+        return dataContract.getAirlineCount();
+    }
+
+    function getFundedAirlineCount() public view returns(uint256) {
+        return dataContract.getFundedAirlineCount();
+    }    
+
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
     function voteForAirline(address airline) 
-        internal
+        external
         requireFundedAirline(msg.sender) 
-        votingRequired 
-        requireNotPendingAirline(airline)
+        requireVotingThreshold 
+        requirePendingAirline(airline)
         requireNotRegisteredAirline(airline) 
     {
         bool isDuplicate = false;
@@ -162,12 +176,13 @@ contract FlightSuretyApp {
             }
         }
 
-        require(isDuplicate, "Already voted!");
+        require(!isDuplicate, "Already voted!");
 
         votes[airline].push(msg.sender);
 
         if(votes[airline].length > (dataContract.getFundedAirlineCount().div(2))) {
             dataContract.registerAirline(airline, pendingAirlines[airline].name);
+            delete pendingAirlines[airline];
             delete votes[airline];
         }
     }
