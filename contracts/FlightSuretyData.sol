@@ -199,7 +199,7 @@ contract FlightSuretyData {
     /**
      *  @dev Credits payouts to insurees
     */
-    function creditInsurees
+    function creditInsurance
                                 (
                                     address passengerAddress
                                 )

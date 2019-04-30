@@ -489,6 +489,8 @@ contract FlightSuretyData {
     function getPassenger(address passengerAddress) external view returns(uint256 balance, uint256 insuranceCredit);
 
     function buy(address passengerAddress) external payable;
+
+    function creditInsurance(address passengerAddress) external payable;
 }
 
 // endregion
