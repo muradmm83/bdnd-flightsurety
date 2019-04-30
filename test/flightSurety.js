@@ -4,17 +4,12 @@ var BigNumber = require('bignumber.js');
 contract('Flight Surety Tests', async (accounts) => {
 
     var config;
+    let passenger = accounts[7];
+    const MAX_INSURANCE_AMOUNT = web3.utils.toWei('1', 'ether');
 
     before('setup contract', async () => {
         config = await Test.Config(accounts);
         await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address);
-    });
-
-    afterEach('Airlines Count', async () => {
-        let funded = (await config.flightSuretyApp.getFundedAirlineCount()).toNumber();
-        let airline = (await config.flightSuretyApp.getAirlineCount()).toNumber();
-
-        console.log(`Airline Count: ${airline}`, `Funded Count: ${funded}`);
     });
 
     /****************************************************************************************/
@@ -198,5 +193,40 @@ contract('Flight Surety Tests', async (accounts) => {
         }
 
         assert.equal(result, true, 'Airline should not be registered if less than 50% votes');
+    });
+
+    it('(passenger) can buy insurance', async () => {
+        let result = false;
+
+        try {
+            await config.flightSuretyApp.buyInsurance({
+                from: passenger,
+                value: MAX_INSURANCE_AMOUNT
+            });
+
+            result = true;
+        } catch (e) {
+            console.log(e);
+        }
+
+        assert.equal(result, true, 'Passenger should be able to buy insurance');
+    });
+
+    it('(passenger) cannot buy insurance more than 1 ether', async () => {
+        let result = true;
+
+        try {
+            await config.flightSuretyApp.buyInsurance({
+                from: passenger,
+                value: MAX_INSURANCE_AMOUNT
+            });
+        } catch (e) {
+            if (e.reason != 'Exceeded max allowed insurance amount') {
+                console.log(e);
+                result = false;
+            }
+        }
+
+        assert.equal(result, true, 'Passenger should not be able to buy insurance if exceeded max limit');
     });
 });

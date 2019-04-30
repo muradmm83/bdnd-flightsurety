@@ -176,12 +176,11 @@ contract FlightSuretyData {
         airlinesCount = airlinesCount.add(1);        
     }
 
-    function getPassenger(address passengerAddress) external returns(uint256 balance, uint256 insuranceCredit)
+    function getPassenger(address passengerAddress) external view returns(uint256 balance, uint256 insuranceCredit)
     {
         balance = passengers[passengerAddress].balance;
         insuranceCredit = passengers[passengerAddress].insuranceCredit;
     }
-
 
    /**
     * @dev Buy insurance for a flight

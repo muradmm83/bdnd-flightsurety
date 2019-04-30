@@ -280,13 +280,18 @@ contract FlightSuretyApp {
         (balance,) = dataContract.getPassenger(msg.sender);
         balance = balance.add(msg.value);
 
-        if(balance >= MAX_FLIGHT_INSURACE) {
+        if(balance > MAX_FLIGHT_INSURACE) {
             msg.sender.transfer(msg.value);
             require(false, "Exceeded max allowed insurance amount");
         }
 
         dataContract.buy.value(msg.value)(msg.sender);
     } 
+
+    function getPassenger() external view returns(uint256 balance, uint256 insuranceCredit) 
+    {
+        (balance, insuranceCredit) = dataContract.getPassenger(msg.sender);
+    }
 
 
 // region ORACLE MANAGEMENT
@@ -481,7 +486,7 @@ contract FlightSuretyData {
 
     function fundAirline(address airline) external payable;
 
-    function getPassenger(address passengerAddress) external returns(uint256 balance, uint256 insuranceCredit);
+    function getPassenger(address passengerAddress) external view returns(uint256 balance, uint256 insuranceCredit);
 
     function buy(address passengerAddress) external payable;
 }
