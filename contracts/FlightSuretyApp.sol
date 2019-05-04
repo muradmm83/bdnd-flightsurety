@@ -25,6 +25,7 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
     uint256 private constant AIRLINE_VOTING_THRESHOLD = 4;
+    
     uint256 public constant MAX_FLIGHT_INSURACE = 1 ether;
 
     address private contractOwner;          // Account used to deploy contract
@@ -36,6 +37,7 @@ contract FlightSuretyApp {
         address airline;
     }
     mapping(bytes32 => Flight) private flights;
+    mapping(bytes32 => address[]) private flightPassengers;
 
     struct Airline {
         string name;
@@ -154,7 +156,7 @@ contract FlightSuretyApp {
 
     function getFundedAirlineCount() public view returns(uint256) {
         return dataContract.getFundedAirlineCount();
-    }    
+    }
 
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
@@ -222,18 +224,51 @@ contract FlightSuretyApp {
         dataContract.fundAirline.value(msg.value)(msg.sender);
     }
 
+    function buyInsurance(address airline, string flight, uint256 timestamp) external payable
+    {
+        require(msg.value <= MAX_FLIGHT_INSURACE, "Exceeded max allowed insurance amount");
 
-   /**
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+
+        require(flights[key].isRegistered, "Flight is not registered");
+
+        flightPassengers[key].push(msg.sender);
+        dataContract.buy.value(msg.value)(msg.sender, key);
+    }
+
+    function creditInsurance(address passenger, address airline, string flight, uint256 timestamp) internal
+    {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        uint256 balance;
+        (balance,) = dataContract.getPassengerPurchase(passenger, key);
+        dataContract.creditInsurance(passenger, balance.div(uint256(2)), key);
+    }
+
+    function withdraw(address airline, string flight, uint256 timestamp) external
+    {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+
+        dataContract.withdraw(msg.sender, key);
+    }
+
+    /**
     * @dev Register a future flight for insuring.
     *
     */  
     function registerFlight
                                 (
-                                    address newAirline,
-                                    string name
+                                    string flight,
+                                    uint256 timestamp
                                 )
                                 external
+                                requireFundedAirline(msg.sender)
     {
+        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
+
+        require(!flights[key].isRegistered, "Flight is already registered");
+
+        flights[key] = Flight(true, STATUS_CODE_UNKNOWN, timestamp, msg.sender);
+        flightPassengers[key] = new address[](0);
     }
     
    /**
@@ -248,8 +283,18 @@ contract FlightSuretyApp {
                                     uint8 statusCode
                                 )
                                 internal
-                                pure
     {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+
+        require(flights[key].isRegistered, "Flight is not registered");
+
+        flights[key].statusCode = statusCode;
+
+        if(statusCode == STATUS_CODE_LATE_AIRLINE) {
+            for(uint8 i = 0; i < flightPassengers[key].length; i++) {
+                creditInsurance(flightPassengers[key][i], airline, flight, timestamp);
+            }
+        }
     }
 
 
@@ -272,25 +317,6 @@ contract FlightSuretyApp {
                                             });
 
         emit OracleRequest(index, airline, flight, timestamp);
-    }
-
-    function buyInsurance() external payable 
-    {
-        uint256 balance;
-        (balance,) = dataContract.getPassenger(msg.sender);
-        balance = balance.add(msg.value);
-
-        if(balance > MAX_FLIGHT_INSURACE) {
-            msg.sender.transfer(msg.value);
-            require(false, "Exceeded max allowed insurance amount");
-        }
-
-        dataContract.buy.value(msg.value)(msg.sender);
-    } 
-
-    function getPassenger() external view returns(uint256 balance, uint256 insuranceCredit) 
-    {
-        (balance, insuranceCredit) = dataContract.getPassenger(msg.sender);
     }
 
 
@@ -469,28 +495,30 @@ contract FlightSuretyApp {
 
 // region Data Contract
 
-contract FlightSuretyData {
+    contract FlightSuretyData {
 
-    function registerAirline
-                            (
-                                address airlineAddress,
-                                string name
-                            )
-                            external;
-    
-    function getAirline(address _airlineAddress) external view returns(string name, bool isRegistered, bool isFunded);
+        function registerAirline
+                                (
+                                    address airlineAddress,
+                                    string name
+                                )
+                                external;
+        
+        function getAirline(address _airlineAddress) external view returns(string name, bool isRegistered, bool isFunded);
 
-    function getAirlineCount() external view returns(uint256);
+        function getAirlineCount() external view returns(uint256);
 
-    function getFundedAirlineCount() external view returns(uint256);
+        function getFundedAirlineCount() external view returns(uint256);
 
-    function fundAirline(address airline) external payable;
+        function fundAirline(address airline) external payable;
 
-    function getPassenger(address passengerAddress) external view returns(uint256 balance, uint256 insuranceCredit);
+        function buy(address passengerAddress, bytes32 flight) external payable;
 
-    function buy(address passengerAddress) external payable;
+        function creditInsurance(address passengerAddress, uint256 amount, bytes32 flight) external;
+        
+        function withdraw(address passengerAddress, bytes32 flight) external;
 
-    function creditInsurance(address passengerAddress) external payable;
-}
+        function getPassengerPurchase(address passengerAddress, bytes32 flight) external view returns(uint256 balance, uint256 insuranceCredit);
+    }
 
 // endregion

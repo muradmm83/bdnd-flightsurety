@@ -6,6 +6,11 @@ contract('Flight Surety Tests', async (accounts) => {
     var config;
     let passenger = accounts[7];
     const MAX_INSURANCE_AMOUNT = web3.utils.toWei('1', 'ether');
+    const STATUS_CODE_AIRLINE_DELAY = 20;
+
+    let flight = 'BDND 101';
+    let timestamp = Math.floor(new Date().getTime() / 1000);
+    let oracles = accounts.slice(9, 30);
 
     before('setup contract', async () => {
         config = await Test.Config(accounts);
@@ -15,6 +20,8 @@ contract('Flight Surety Tests', async (accounts) => {
     /****************************************************************************************/
     /* Operations and Settings                                                              */
     /****************************************************************************************/
+
+
 
     it(`(multiparty) has correct initial isOperational() value`, async function () {
 
@@ -195,38 +202,103 @@ contract('Flight Surety Tests', async (accounts) => {
         assert.equal(result, true, 'Airline should not be registered if less than 50% votes');
     });
 
-    it('(passenger) can buy insurance', async () => {
-        let result = false;
+    it('(Flight) funded airlines are able to register flights', async () => {
+        let result = true;
 
         try {
-            await config.flightSuretyApp.buyInsurance({
+            await config.flightSuretyApp.registerFlight(flight, timestamp, {
+                from: config.firstAirline
+            });
+        } catch (e) {
+            console.log(e);
+            result = false;
+        }
+
+        assert.equal(result, true, 'Funded airlines should be able to register flight');
+    });
+
+    it('(oracle) register 20 oracles', async () => {
+        let result = true;
+
+        for (let i = 0; i < oracles.length; i++) {
+            try {
+                await config.flightSuretyApp.registerOracle({
+                    from: oracles[i],
+                    value: MAX_INSURANCE_AMOUNT
+                });
+            } catch (e) {
+                result = false;
+                console.log(e);
+                break;
+            }
+        }
+
+        assert.equal(result, true, 'Register 20 oracles');
+    });
+
+    it('(passenger) can buy insurance', async () => {
+        let result = true;
+
+        try {
+            await config.flightSuretyApp.buyInsurance(config.firstAirline, flight, timestamp, {
                 from: passenger,
                 value: MAX_INSURANCE_AMOUNT
             });
-
-            result = true;
         } catch (e) {
+            result = false;
             console.log(e);
         }
 
         assert.equal(result, true, 'Passenger should be able to buy insurance');
     });
 
-    it('(passenger) cannot buy insurance more than 1 ether', async () => {
+    it('(oracle) submit airline delay status and refund passenger', async () => {
         let result = true;
 
-        try {
-            await config.flightSuretyApp.buyInsurance({
-                from: passenger,
-                value: MAX_INSURANCE_AMOUNT
-            });
-        } catch (e) {
-            if (e.reason != 'Exceeded max allowed insurance amount') {
-                console.log(e);
-                result = false;
+        await config.flightSuretyApp.fetchFlightStatus(config.firstAirline, flight, timestamp);
+
+        for (let i = 0; i < oracles.length; i++) {
+            try {
+                let indexes = await config.flightSuretyApp.getMyIndexes({
+                    from: oracles[i]
+                });
+
+                for (let idx = 0; idx < indexes.length; idx++) {
+                    await config.flightSuretyApp.submitOracleResponse(indexes[idx], config.firstAirline, flight, timestamp, STATUS_CODE_AIRLINE_DELAY, {
+                        from: oracles[i]
+                    });
+                }
+
+            } catch (e) {
+                if (e.reason !== 'Index does not match oracle request' && e.reason !== 'Flight or timestamp do not match oracle request') {
+                    result = false;
+                    console.log(e);
+                    break;
+                }
             }
         }
 
-        assert.equal(result, true, 'Passenger should not be able to buy insurance if exceeded max limit');
+        assert.equal(result, true, 'Passenger can have their insurance credited');
+    });
+
+    it('(passenger) withdraw', async () => {
+        let result = false;
+
+        try {
+            let previousBalance = await web3.eth.getBalance(passenger);
+
+            await config.flightSuretyApp.withdraw(config.firstAirline, flight, timestamp, {
+                from: passenger
+            });
+
+            let currentBalance = await web3.eth.getBalance(passenger);
+
+            result = new BigNumber(currentBalance).gt(previousBalance);
+
+        } catch (e) {
+            console.log(e);
+        }
+
+        assert.equal(result, true, 'Passenger can withdraw his/her insurance credit');
     });
 });
