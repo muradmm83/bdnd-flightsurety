@@ -14,7 +14,7 @@ let oracles = [];
 // register oracles
 (async () => {
   try {
-    oracles = (await web3.eth.getAccounts()).slice(10, 31); // 20 oracles 
+    oracles = (await web3.eth.getAccounts()).slice(20, 41); // 20 oracles 
 
     for (let i = 0; i < oracles.length; i++) {
       await flightSuretyApp.methods.registerOracle().send({
