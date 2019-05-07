@@ -2,11 +2,15 @@ import DOM from './dom';
 import Contract from './contract';
 import './flightsurety.css';
 
-let flights = [];
+let flightStatus = {
+    10: 'On Time 👌',
+    20: 'Late due to airline 😢',
+    30: 'Late due to weather 🌩',
+    40: 'Late due to technical diffeculties 🛠',
+    50: 'Late due to other issues 🤷‍♂️'
+};
 
 (async () => {
-
-    let result = null;
 
     let contract = new Contract('localhost', () => {
 
@@ -23,37 +27,30 @@ let flights = [];
 
         // User-submitted transaction
         DOM.elid('submit-oracle').addEventListener('click', () => {
-            let flight = DOM.elid('flight-number').value;
+            let flight = contract.flights[DOM.elid('flight-number').selectedIndex];
+
+            if (!flight) {
+                alert('Select/register flight first 😊');
+                return;
+            }
+
             // Write transaction
             contract.fetchFlightStatus(flight, (error, result) => {
                 display('Oracles', 'Trigger oracles', [{
                     label: 'Fetch Flight Status',
                     error: error,
-                    value: result.flight + ' ' + result.timestamp
+                    value: result.name + ' ' + result.timestamp
                 }]);
             });
         })
 
-        DOM.elid('register-flight').addEventListener('click', () => {
-            let flightName = DOM.elid('flight-name').value;
-            // Write transaction
-            contract.registerFlight(flightName, (error, result) => {
-                console.log(error, result);
-                display('Register Flight', '', [{
-                    label: `Flight '${flightName}' was registered?`,
-                    error: error,
-                    value: 'Yes'
-                }]);
-
-                if (!error) {
-                    flights.push(result);
-                    let option = document.createElement('option');
-                    option.value = result.timestamp;
-                    option.innerHTML = result.flightName;
-                    Dom.elid('flight-number').appendChild(option);
-                }
-            });
-        })
+        contract.trackFlightStatus((error, args) => {
+            display('Flight Status Update', '', [{
+                label: args ? args.flight : '',
+                error: error,
+                value: args ? flightStatus[args.status] : ''
+            }]);
+        });
 
     });
 
@@ -62,6 +59,7 @@ let flights = [];
 
 
 function display(title, description, results) {
+
     let displayDiv = DOM.elid("display-wrapper");
     let section = DOM.section();
     section.appendChild(DOM.h2(title));

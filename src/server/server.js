@@ -9,17 +9,22 @@ let web3 = new Web3(new Web3.providers.WebsocketProvider(config.url.replace('htt
 web3.eth.defaultAccount = web3.eth.accounts[0];
 let flightSuretyApp = new web3.eth.Contract(FlightSuretyApp.abi, config.appAddress);
 
+let gasOptions = {
+  gas: 300000000,
+  gasPrice: 20000000000
+};
 let oracles = [];
 
 // register oracles
 (async () => {
   try {
-    oracles = (await web3.eth.getAccounts()).slice(20, 41); // 20 oracles 
+    oracles = (await web3.eth.getAccounts()).slice(19); // 80 oracles 
 
     for (let i = 0; i < oracles.length; i++) {
       await flightSuretyApp.methods.registerOracle().send({
         from: oracles[i],
-        value: web3.utils.toWei('1', 'ether')
+        value: web3.utils.toWei('1', 'ether'),
+        ...gasOptions
       });
     }
   } catch (e) {
@@ -37,14 +42,22 @@ flightSuretyApp.events.OracleRequest({
 }, function (error, event) {
   if (error) console.log(error);
 
-  let args = event.args;
+
+}).on('data', async event => {
+  let args = event.returnValues;
+
+  console.log(`Index: ${args.index}, Airline: ${args.airline}, Flight: ${args.flight}, Timestamp: ${args.timestamp}`);
 
   for (let i = 0; i < oracles.length; i++) {
-    flightSuretyApp.submitOracleResponse(args.index, args.airline, args.flight, args.timestamp, getRandomStatusCode(), {
-      from: oracles[i]
-    });
+    try {
+      await flightSuretyApp.methods.submitOracleResponse(args.index, args.airline, args.flight, args.timestamp, getRandomStatusCode()).send({
+        from: oracles[i],
+        ...gasOptions
+      });
+    } catch (err) {
+      console.log(err);
+    }
   }
-
 });
 
 const app = express();
