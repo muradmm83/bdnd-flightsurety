@@ -130,4 +130,17 @@ export default class Contract {
             callback(null, event.returnValues);
         });
     }
+
+    buyInsurance(flight, callback) {
+        let self = this;
+        self.flightSuretyApp.methods
+            .buyInsurance(self.airlines[0], flight.name, flight.timestamp)
+            .send({
+                from: self.passengers[0],
+                value: self.web3.utils.toWei('1', 'ether'),
+                ...self.gasOptions
+            }, (error, result) => {
+                callback(error, flight);
+            });
+    }
 }

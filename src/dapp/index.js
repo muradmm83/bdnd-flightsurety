@@ -10,6 +10,8 @@ let flightStatus = {
     50: 'Late due to other issues 🤷‍♂️'
 };
 
+let insuredFlight = [];
+
 (async () => {
 
     let contract = new Contract('localhost', () => {
@@ -27,7 +29,7 @@ let flightStatus = {
 
         // User-submitted transaction
         DOM.elid('submit-oracle').addEventListener('click', () => {
-            let flight = contract.flights[DOM.elid('flight-number').selectedIndex];
+            let flight = insuredFlight[DOM.elid('bought-flight').selectedIndex];
 
             if (!flight) {
                 alert('Select/register flight first 😊');
@@ -42,7 +44,33 @@ let flightStatus = {
                     value: result.name + ' ' + result.timestamp
                 }]);
             });
-        })
+        });
+
+        DOM.elid('buy-insurance').addEventListener('click', () => {
+            let flight = contract.flights[DOM.elid('flight-number').selectedIndex];
+
+            if (!flight) {
+                alert('Select/register flight first 😊');
+                return;
+            }
+
+            contract.buyInsurance(flight, (error, result) => {
+                display('Buy insurance', '', [{
+                    label: 'Operation',
+                    error,
+                    value: 'successful'
+                }]);
+
+                if (!error) {
+                    insuredFlight.push(result);
+
+                    let option = document.createElement('option');
+                    option.innerHTML = result.name;
+
+                    DOM.elid('bought-flight').appendChild(option);
+                }
+            });
+        });
 
         contract.trackFlightStatus((error, args) => {
             display('Flight Status Update', '', [{
