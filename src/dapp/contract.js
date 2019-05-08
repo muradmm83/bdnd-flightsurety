@@ -71,14 +71,6 @@ export default class Contract {
                             from: self.airlines[0],
                             ...self.gasOptions
                         });
-
-                    await self.flightSuretyApp.methods
-                        .buyInsurance(self.airlines[0], self.flights[i].name, self.flights[i].timestamp)
-                        .send({
-                            from: self.passengers[0],
-                            value: self.web3.utils.toWei('1', 'ether'),
-                            ...self.gasOptions
-                        });
                 }
 
                 callback();
